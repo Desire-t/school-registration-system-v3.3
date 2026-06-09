@@ -1,0 +1,455 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+__init__.py
+admin_repository/__init__.py
+admin_repository/admin_repository.py
+admin_repository/test_admin_repository.py
+student_repository/__init__.py
+student_repository/student_repository.py
+student_repository/test_student_repository.py
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="__init__.py">
+"""Repository package initializer."""
+</file>
+
+<file path="admin_repository/__init__.py">
+"""Admin repository package initializer."""
+</file>
+
+<file path="admin_repository/admin_repository.py">
+"""
+Repository for admin data access and manipulation.
+"""
+import sqlite3
+from utils.response import Response
+from utils.base_repository import BaseRepository
+from datetime import datetime
+
+class AdminRepository(BaseRepository):
+    """
+    Handles CRUD operations for admin records in the database.
+    """
+    def create_admin_table(self):
+        """Create the admins table in the database."""
+        response = Response()
+        
+        try:
+            with self.get_connection() as conn:
+                conn.execute("""
+                            CREATE TABLE IF NOT EXISTS admins(
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                name TEXT NOT NULL,
+                                batch_id TEXT UNIQUE NOT NULL,
+                                password  BLOB NOT NULL,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                            """)
+            return response.success("Admin table initialized")
+        except sqlite3.Error as e:
+            return response.error("Failed to initialize admin table", error_type="system")
+    
+    def save_admin(self, name, batch_id, password):
+        """Save a new admin record to the database."""
+        response = Response()
+        try:
+            with self.get_connection() as conn:
+                conn.execute("""
+                            INSERT INTO admins(
+                                name,
+                                batch_id,
+                                password
+                            )
+                            VALUES(?,?,?)
+                            """, (name, batch_id, password))
+            return response.success("Admin created")
+        except sqlite3.IntegrityError as e:
+            return response.error("Admin with this batch ID already exists", error_type="duplicate")
+        except sqlite3.Error as e:
+            return response.error("Failed to create admin", error_type="system")
+    
+    def fetch_admin_by_batch_id(self, batch_id):
+        """Fetch an admin by batch ID."""
+        response = Response()
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM admins WHERE batch_id=?", (batch_id,))
+                row = cursor.fetchone()
+
+                result = dict(row) if row else None
+            if result:
+                return response.success("Admin retrieved",result)
+            else:
+                return response.error("Admin not found", error_type="not_found")
+        except sqlite3.Error as e:
+            return response.error("Failed to retrieve admin", error_type="system")
+    
+    def fetch_all_admins(self):
+        """Fetch all admins from the database."""
+        response = Response()
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM admins")
+                rows = cursor.fetchall()
+            result = [dict(row) for row in rows]
+            return response.success("Admins retrieved",result)
+        except sqlite3.Error as e:
+            return response.error("Failed to retrieve admins", error_type="system")
+    def update_admin(self, name, password, batch_id):
+        """Update an admin's information in the database."""
+        response = Response()
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute("""
+                            UPDATE admins SET name=?, password=?, updated_at=? WHERE batch_id=?
+                            """,(name, password, timestamp, batch_id))
+
+            return response.success("Admin updated")
+        except sqlite3.IntegrityError as e:
+            return response.error("Admin with this batch ID already exists", error_type="duplicate")
+        except sqlite3.Error as e:
+            return response.error("Failed to update admin", error_type="system")
+</file>
+
+<file path="admin_repository/test_admin_repository.py">
+from repository.admin_repository.admin_repository import AdminRepository
+
+def create_admin_repo():
+    repo = AdminRepository()
+    repo.create_admin_table()
+    return repo
+
+def test_create_admin_table():
+    repo = create_admin_repo()
+    result = repo.create_admin_table()
+    assert result['success'] is True
+
+def test_save_admin():
+    repo = create_admin_repo()
+    result = repo.save_admin("Engineer eze 1", "0101", "tambe147")
+    assert result['success'] is True
+
+def test_fetch_all_admins():
+    repo = create_admin_repo()
+    repo.save_admin("Engineer eze 2", "0102", "tambe147")
+    result = repo.fetch_all_admins()
+    assert result['success'] is True
+    assert isinstance(result['data'], list)
+
+def test_fetch_admin_by_batch_id():
+    repo = create_admin_repo()
+    repo.save_admin("Engineer eze 3", "0103", "tambe147")
+    result = repo.fetch_admin_by_batch_id("0103")
+    assert result['success'] is True
+    assert result['data']['batch_id'] == "0103"
+
+def test_update_admin():
+    repo = create_admin_repo()
+    repo.save_admin("Engineer eze 4", "0104", "tambe147")
+    result = repo.update_admin("Engineer Tataw", "tambe", "0104")
+    assert result['success'] is True
+</file>
+
+<file path="student_repository/__init__.py">
+"""Student repository package initializer."""
+</file>
+
+<file path="student_repository/student_repository.py">
+"""
+Repository for student data access and manipulation.
+"""
+import sqlite3
+from utils.response import Response
+
+from utils.base_repository import BaseRepository
+from datetime import datetime
+
+class StudentRepository(BaseRepository):
+    """
+    Handles CRUD operations for student records in the database.
+    """
+    def create_students_table(self):
+        """Create the students table in the database."""
+        response = Response()
+        try:
+            with self.get_connection() as conn:
+                conn.execute("""
+                            CREATE TABLE IF NOT EXISTS students(
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                name TEXT NOT NULL,
+                                age INTEGER NOT NULL,
+                                matricule TEXT UNIQUE NOT NULL,
+                                department TEXT NOT NULL,
+                                english FLOAT NOT NULL,
+                                french FLOAT NOT NULL,
+                                total_marks FLOAT NOT NULL,
+                                average FLOAT NOT NULL,
+                                grade TEXT NOT NULL,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                            """)
+            return response.success("Student table initialized")
+        except sqlite3.Error as e:
+            return response.error("Failed to initialize student table", error_type="system")
+    
+    def save_student(self, name, age, matricule, department, english, french, total_marks, average, grade):
+        """Save a new student record to the database."""
+        response = Response()
+        try:
+            with self.get_connection() as conn:
+                conn.execute("""
+                            INSERT INTO students(
+                                name,
+                                age,
+                                matricule,
+                                department,
+                                english,
+                                french,
+                                total_marks,
+                                average,
+                                grade
+                            )
+                            VALUES(?,?,?,?,?,?,?,?,?)
+                            """,(name,
+                                age,
+                                matricule,
+                                department,
+                                english,
+                                french,
+                                total_marks,
+                                average,
+                                grade
+                            ))
+            return response.success("Student record created")
+        except sqlite3.IntegrityError as e:
+            return response.error("Student with this matricule already exists", error_type="duplicate")
+        except sqlite3.Error as e:
+            return response.error("Failed to create student", error_type="system")
+    
+    def fetch_student_by_matricule(self, matricule):
+        """Fetch a student by matricule."""
+        response = Response()
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM students WHERE matricule=?", (matricule,))
+                row = cursor.fetchone()
+            result = dict(row) if row else None
+            if result:
+                return response.success("Student retrieved",result)
+            else:
+                return response.error("Student not found", error_type="not_found")
+        except sqlite3.Error as e:
+            return response.error("Failed to retrieve student", error_type="system")
+    
+    def fetch_all_students(self):
+        """Fetch all students from the database."""
+        response = Response()
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM students")
+                rows = cursor.fetchall()
+            result = [dict(row) for row in rows]
+            if result:
+                return response.success("Students retrieved", result)
+            else:
+                return response.error("No students found", error_type="not_found")
+        except sqlite3.Error as e:
+            return response.error("Failed to retrieve students", error_type="system")
+    
+    def fetch_student_by_name(self, name):
+        """Fetch a student by name."""
+        response = Response()
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM students WHERE name=?", (name,))
+                row = cursor.fetchone()
+            result = dict(row) if row else None
+            if result:
+                return response.success("Student retrieved", result)
+            else:
+                return response.error("Student not found", error_type="not_found")
+        except sqlite3.Error as e:
+            return response.error("Failed to retrieve student", error_type="system")
+    
+    def update_student(self, name, age, department, english, french, total_marks, average, grade, matricule, timestamp): 
+        """Update an existing student record in the database."""
+        response = Response()
+        try:
+            with self.get_connection() as conn:
+                conn.execute("""
+                            UPDATE students
+                            SET name=?,
+                            age=?,
+                            department=?,
+                            english=?,
+                            french=?,
+                            total_marks=?, 
+                            average=?,
+                            grade=?,
+                            updated_at=? WHERE matricule=?""",
+                            (name, age, department, english, french, total_marks, average, grade, timestamp, matricule))
+            return response.success("Student details updated")
+        except sqlite3.IntegrityError as e:
+            return response.error("Student with this matricule already exists", error_type="duplicate")
+        except sqlite3.Error as e:
+            return response.error("Failed to update student", error_type="system")
+</file>
+
+<file path="student_repository/test_student_repository.py">
+from repository.student_repository.student_repository import StudentRepository
+from datetime import datetime
+
+def create_student_repo():
+    repo = StudentRepository()
+    repo.create_students_table()
+    return repo
+
+def test_create_students_table():
+    repo = create_student_repo()
+    result = repo.create_students_table()
+    assert result["success"] is True
+
+def test_save_student():
+    repo = create_student_repo()
+    result = repo.save_student(
+        "Engr Eze",
+        15,
+        "ICTU2026-A",
+        "ICT",
+        75,
+        80,
+        155,
+        77.5,
+        "B",
+    )
+    assert result["success"] is True
+
+def test_fetch_student_by_matricule():
+    repo = create_student_repo()
+    repo.save_student(
+        "Engr Eze",
+        15,
+        "ICTU2026-B",
+        "ICT",
+        75,
+        80,
+        155,
+        77.5,
+        "B",
+    )
+    result = repo.fetch_student_by_matricule("ICTU2026-B")
+    assert result['success'] is True
+    assert result['data']['matricule'] == "ICTU2026-B"
+
+def test_fetch_all_students():
+    repo = create_student_repo()
+    repo.save_student(
+        "Engr Eze",
+        15,
+        "ICTU2026-C",
+        "ICT",
+        75,
+        80,
+        155,
+        77.5,
+        "B",
+    )
+    result = repo.fetch_all_students()
+    assert result['success'] is True
+    assert isinstance(result['data'], list)
+
+def test_fetch_student_by_name():
+    repo = create_student_repo()
+    repo.save_student(
+        "Engr Eze",
+        15,
+        "ICTU2026-D",
+        "ICT",
+        75,
+        80,
+        155,
+        77.5,
+        "B",
+    )
+    result = repo.fetch_student_by_name("Engr Eze")
+    assert result['success'] is True
+    assert result['data']['name'] == "Engr Eze"
+
+def test_update_student():
+    repo = create_student_repo()
+    matricule = "ICTU2026-E"
+    repo.save_student(
+        "Engr Eze",
+        15,
+        matricule,
+        "ICT",
+        75,
+        80,
+        155,
+        77.5,
+        "B",
+        
+    )
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    result = repo.update_student("Engr", 12, "ict", 58, 12, 70, 35, "E", matricule, timestamp)
+    assert result['success'] is True
+</file>
+
+</files>
